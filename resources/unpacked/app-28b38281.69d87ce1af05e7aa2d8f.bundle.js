@@ -84,7 +84,7 @@
               error: g("error"),
             },
             onBreadcrumb: [b, I, P],
-            onError: [b, E, C, R, U],
+            onError: [b, E, C, R, gatherDeviceInformation],
           }));
       }
       function h(e) {
@@ -157,7 +157,7 @@
               e.stacktrace.forEach((e) => (e.file = w(e.file)));
           });
       }
-      async function U(e) {
+      async function gatherDeviceInformation(e) {
         const t = (0, c.H)(),
           a = t.info,
           o = await t.getMemoryInfo();
@@ -171,9 +171,9 @@
           }),
           !n().getMetadata("device", "antivirus"))
         ) {
-          const a = ((await t.getInstalledAvProducts()) ?? ["<error>"]).sort();
-          n().addMetadata("device", "antivirus", a),
-            e.addMetadata("device", "antivirus", a);
+          const installedAvProducts = ((await t.getInstalledAvProducts()) ?? ["<error>"]).sort();
+          n().addMetadata("device", "antivirus", installedAvProducts),
+            e.addMetadata("device", "antivirus", installedAvProducts);
         }
         return !0;
       }
@@ -190,26 +190,26 @@
       }
     },
     8462: (e, t, a) => {
-      a.d(t, { o: () => l, q: () => o });
+      a.d(t, { o: () => EmailValidator, q: () => o });
       var o,
         n = a(3689),
         r = a(11912);
       !(function (e) {
         (e.Invalid = "invalid"), (e.Unsure = "unsure"), (e.Valid = "valid");
       })(o || (o = {}));
-      const c = new Map([
+      const popularEmailDomains = new Map([
           ["gmail", "com"],
           ["outlook", "com"],
           ["hotmail", "com"],
           ["live", "com"],
           ["yahoo", "com"],
         ]),
-        s = new Map([
+        gmailMisspellings = new Map([
           ["gemail", "gmail"],
           ["gmial", "gmail"],
           ["gmai", "gmail"],
         ]),
-        i = new Map([
+        domainAbbreviations = new Map([
           ["c", "com"],
           ["ccom", "com"],
           ["cim", "com"],
@@ -240,36 +240,41 @@
           ["xom", "com"],
           ["yk", "uk"],
         ]);
-      class l {
-        async validate(e) {
-          if ("string" != typeof e) return { status: o.Invalid };
-          const t = e.split("@");
-          if (2 !== t.length) return { status: o.Invalid };
-          const a = t[0].replace(/\s/g, ""),
-            l = t[1]
-              .replace(/\s/g, "")
-              .replace(/[。｡︒]/g, ".")
-              .toLocaleLowerCase();
-          if (0 === a.length || l.length < 3 || a.length + l.length > 255)
+      class EmailValidator {
+        async validate(emailStr) {
+          if ("string" != typeof emailStr) return { status: o.Invalid };
+          const emailParts = emailStr.split("@");
+          if (2 !== emailParts.length) return { status: o.Invalid };
+          const username = emailParts[0].replace(/\s/g, "");
+          const domain = emailParts[1]
+            .replace(/\s/g, "")
+            .replace(/[。｡︒]/g, ".")
+            .toLocaleLowerCase();
+          if (
+            0 === username.length ||
+            domain.length < 3 ||
+            username.length + domain.length > 255
+          )
             return { status: o.Invalid };
-          if (!l.includes(".")) return { status: o.Invalid };
-          const m = `${a}@${l}`,
-            u = l.split("."),
+          if (!domain.includes(".")) return { status: o.Invalid };
+          const m = `${username}@${domain}`,
+            u = domain.split("."),
             p = u.pop(),
             d = u.join(".");
-          let g = i.get(p);
-          const f = s.get(d);
+          let g = domainAbbreviations.get(p);
+          const f = gmailMisspellings.get(d);
           return g || f
-            ? (f && !g && (g = c.get(d)),
+            ? (f && !g && (g = popularEmailDomains.get(d)),
               {
                 status: o.Unsure,
-                recommendation: `${a}@${f || d}.${g || p}`,
+                recommendation: `${username}@${f || d}.${g || p}`,
                 normalized: m,
               })
-            : /^[\p{L}\p{N}_+.-]+$/gu.test(a) && /^[\p{L}\p{N}.-]+$/gu.test(l)
+            : /^[\p{L}\p{N}_+.-]+$/gu.test(username) &&
+              /^[\p{L}\p{N}.-]+$/gu.test(domain)
             ? {
                 status: (await Promise.race([
-                  this.#e(n.H9(l)),
+                  this.isValidMXRecord(n.H9(domain)),
                   (0, r.UC)(3e3).then(() => !1),
                 ]))
                   ? o.Valid
@@ -278,16 +283,19 @@
               }
             : { status: o.Unsure, normalized: m };
         }
-        async #e(e) {
-          const t = new URL("https://1.1.1.1/dns-query");
-          t.searchParams.set("type", "MX"), t.searchParams.set("name", e);
+        async isValidMXRecord(domain) {
+          const dnsQuery = new URL("https://1.1.1.1/dns-query");
+          dnsQuery.searchParams.set("type", "MX"),
+            dnsQuery.searchParams.set("name", domain);
           try {
-            const e = await (
-              await fetch(t, { headers: { Accept: "application/dns-json" } })
+            const response = await (
+              await fetch(dnsQuery, {
+                headers: { Accept: "application/dns-json" },
+              })
             ).json();
             return (
-              0 === e.Status &&
-              e.Answer?.some(
+              0 === response.Status &&
+              response.Answer?.some(
                 (e) => !e.data.endsWith(" .") && !e.data.endsWith(" localhost.")
               )
             );

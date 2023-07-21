@@ -103,7 +103,7 @@
           const n = o[l];
           return "string" == typeof n
             ? this.#l.getValue(`trainer_hotkey.${n}`)
-            : c[l] || null;
+            : keyNames[l] || null;
         }
       };
       i = (0, e.gn)(
@@ -368,7 +368,7 @@
           null,
           null,
         ],
-        c = [
+        keyNames = [
           "Not Set",
           "LClick",
           "RClick",

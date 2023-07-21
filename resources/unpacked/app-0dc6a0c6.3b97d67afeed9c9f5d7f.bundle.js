@@ -36,24 +36,27 @@
         attached() {}
         detached() {}
         async create(e, t) {
-          const a = this.catalog.games[e],
-            i = this.catalog.titles[a?.titleId];
-          if (!a || !i) return;
-          const s = await this.#r(a);
+          const game = this.catalog.games[e],
+            title = this.catalog.titles[game?.titleId];
+          if (!game || !title) return;
+          const s = await this.fetchAndSetIconForApp(game);
           await this.#e.createDesktopShortcut(
-            `wemod://play?titleId=${i.id}&gameId=${a.id}`,
-            this.#t.getValue("desktop_shortcut.play_$title", { title: i.name }),
+            `wemod://play?titleId=${title.id}&gameId=${game.id}`,
+            this.#t.getValue("desktop_shortcut.play_$title", {
+              title: title.name,
+            }),
             s
           ),
-            this.#a.publish(new o.EF(t, a.id));
+            this.#a.publish(new o.EF(t, game.id));
         }
-        #n(e) {
+        loadImageAsync(e) {
           return new Promise((t) => {
-            const a = new Image();
-            a.addEventListener("load", () => t(a), { once: !0 }), (a.src = e);
+            const image = new Image();
+            image.addEventListener("load", () => t(image), { once: !0 }),
+              (image.src = e);
           });
         }
-        async #r(e) {
+        async fetchAndSetIconForApp(e) {
           const t = this.#s.getPreferredInstallationInfo(e.id).app;
           if (!t) return null;
           const a = await this.#i.getIcon(t.platform, t.sku);
@@ -62,38 +65,44 @@
           let s;
           if (
             (".ico" === i
-              ? (s = await this.#l(a))
-              : [".jpg", ".jpeg", ".png"].includes(i) && (s = await this.#n(a)),
+              ? (s = await this.loadImageFromFile(a))
+              : [".jpg", ".jpeg", ".png"].includes(i) &&
+                (s = await this.loadImageAsync(a)),
             !s)
           )
             return null;
-          const r = await this.#o(s),
+          const r = await this.processAndConvertImage(s),
             n = await this.#c(e.id);
           try {
-            this.#d(n, r);
+            this.writeDataToFileAsync(n, r);
           } catch {
             return null;
           }
           return n;
         }
-        async #o(e) {
-          const t = document.createElement("canvas"),
-            a = t.getContext("2d"),
-            i = await this.#n(f);
-          if (((t.width = v), (t.height = w), e instanceof ImageData)) {
+        async processAndConvertImage(imageData) {
+          const canvas = document.createElement("canvas"),
+            ctx = canvas.getContext("2d"),
+            image = await this.loadImageAsync(f);
+          if (
+            ((canvas.width = v),
+            (canvas.height = w),
+            imageData instanceof ImageData)
+          ) {
             const t = await window.createImageBitmap(
-              e,
+              imageData,
               0,
               0,
-              e.width,
-              e.height,
+              imageData.width,
+              imageData.height,
               { resizeWidth: v, resizeHeight: w, resizeQuality: "high" }
             );
-            a.drawImage(t, 0, 0);
+            ctx.drawImage(t, 0, 0);
           }
-          e instanceof HTMLImageElement && a.drawImage(e, 0, 0, v, w),
-            a.drawImage(i, v - i.width - 16, w - i.height - 16);
-          const s = await new Promise((e) => t.toBlob(e));
+          imageData instanceof HTMLImageElement &&
+            ctx.drawImage(imageData, 0, 0, v, w),
+            ctx.drawImage(image, v - image.width - 16, w - image.height - 16);
+          const s = await new Promise((e) => canvas.toBlob(e));
           return await new Promise((e, t) => {
             const a = new FileReader();
             a.addEventListener("loadend", () => e(new Uint8Array(a.result)), {
@@ -107,28 +116,34 @@
               a.readAsArrayBuffer(s);
           });
         }
-        async #l(e) {
+        async loadImageFromFile(imagePath) {
           try {
-            const t = await l.promises.readFile(e),
-              a = (await n.parse(t)).sort((e, t) => t.width - e.width)[0];
-            if (a.data instanceof Uint8Array) {
+            const imageFileData = await l.promises.readFile(imagePath),
+              imageMetadataList = (await n.parse(imageFileData)).sort(
+                (e, t) => t.width - e.width
+              )[0];
+            if (imageMetadataList.data instanceof Uint8Array) {
               const e = new Image();
               return (
                 (e.src = URL.createObjectURL(
-                  new Blob([a.buffer], { type: "image/png" })
+                  new Blob([imageMetadataList.buffer], { type: "image/png" })
                 )),
                 e
               );
             }
-            return new ImageData(a.data, a.width, a.height);
+            return new ImageData(
+              imageMetadataList.data,
+              imageMetadataList.width,
+              imageMetadataList.height
+            );
           } catch {
             return null;
           }
         }
-        async #d(e, t) {
-          const a = Buffer.from(t),
-            i = await (0, g.N)(a);
-          await l.promises.writeFile(e, i);
+        async writeDataToFileAsync(filePath, data) {
+          const bufferData = Buffer.from(data),
+            processedData = await (0, g.N)(bufferData);
+          await l.promises.writeFile(filePath, processedData);
         }
         async #c(e) {
           const t = this.#i.iconCacheDirectory;
@@ -201,8 +216,8 @@
         I = a(81866),
         b = a(87632),
         _ = a(76330);
-      function A(e) {
-        return "number" == typeof e ? parseFloat((e / 1e3).toFixed(2)) : null;
+      function convertMillisecondsToSecondsWithTwoDecimals(milliseconds) {
+        return "number" == typeof milliseconds ? parseFloat((milliseconds / 1000).toFixed(2)) : null;
       }
       const P = {
           [o.$c.AcquiringBinary]: "acquiring_binary",
@@ -245,7 +260,7 @@
         #g;
         #p;
         #f;
-        #e;
+        appInfo;
         #v;
         #w;
         #t;
@@ -267,18 +282,18 @@
             (this.#g = i),
             (this.#p = s),
             (this.#f = r),
-            (this.#e = n),
+            (this.appInfo = n),
             (this.#v = l),
             (this.#w = o),
             (this.#t = c);
         }
         activate() {
-          this.#u.user("last_app_version", this.#e.info.version),
-            this.#u.user("system_locale", this.#e.info.locale),
+          this.#u.user("last_app_version", this.appInfo.info.version),
+            this.#u.user("system_locale", this.appInfo.info.locale),
             this.#G(),
             this.accountChanged(this.account),
             this.flags.firstRun && this.#C("first_open"),
-            this.#e.isInTraySinceStartup ||
+            this.appInfo.isInTraySinceStartup ||
               this.#C("app_enter", { firstRun: this.flags.firstRun }, I.$9);
           const e = this.#E.bind(this);
           this.#m.registerMiddleware(e, n.Pt.After),
@@ -307,9 +322,9 @@
               this.#C(
                 "trainer_end",
                 this.#S(e, {
-                  trainerTotalDuration: A(e.totalDuration),
-                  trainerLaunchDuration: A(e.launchDuration),
-                  trainerActiveDuration: A(e.activeDuration),
+                  trainerTotalDuration: convertMillisecondsToSecondsWithTwoDecimals(e.totalDuration),
+                  trainerLaunchDuration: convertMillisecondsToSecondsWithTwoDecimals(e.launchDuration),
+                  trainerActiveDuration: convertMillisecondsToSecondsWithTwoDecimals(e.activeDuration),
                   trainerLaunchResult: T[e.launchResult] ?? null,
                   trainerFinalState: P[e.finalState] ?? null,
                 }),
@@ -320,9 +335,9 @@
               "connected" === e && this.#C("overlay_connect");
             }),
             this.#f.onStatusChanged(this.#N.bind(this)),
-            this.#e.onClosedToTray(() => this.#C("app_background")),
-            this.#e.onRestoredFromTray(() => this.#C("app_open")),
-            this.#e.onAdViewMessage(this.#O.bind(this)),
+            this.appInfo.onClosedToTray(() => this.#C("app_background")),
+            this.appInfo.onRestoredFromTray(() => this.#C("app_open")),
+            this.appInfo.onAdViewMessage(this.#O.bind(this)),
             this.#a.subscribe(h.Us, (e) =>
               this.#C("pro_cta_click", { ctaId: e.id }, I.$9)
             ),
@@ -430,7 +445,7 @@
                   this.#C("window_resize", {
                     width: window.innerWidth,
                     height: window.innerHeight,
-                    maximized: this.#e.maximized,
+                    maximized: this.appInfo.maximized,
                   });
                 return () => {
                   clearTimeout(e), (e = setTimeout(t, 1e4));
@@ -510,7 +525,7 @@
           );
         }
         #$(e) {
-          const t = this.#S(e, { trainerLaunchDuration: A(e.launchDuration) });
+          const t = this.#S(e, { trainerLaunchDuration: convertMillisecondsToSecondsWithTwoDecimals(e.launchDuration) });
           this.#C("trainer_activate", t, I.$9);
           const a = e.getMetadata(c.z9).info.blueprint.cheats,
             i = new Set(),
@@ -520,20 +535,20 @@
               for (const [e, r] of s)
                 if (r.timestamp <= n) {
                   s.delete(e);
-                  const n = a.find((t) => t.target === e);
-                  if (void 0 !== n) {
+                  const cheatInfo = a.find((t) => t.target === e);
+                  if (void 0 !== cheatInfo) {
                     const e = Object.assign(
                       {
-                        cheatUuid: n.uuid,
-                        cheatName: n.name,
-                        cheatType: n.type,
-                        cheatCategory: n.category,
-                        cheatTarget: n.target,
+                        cheatUuid: cheatInfo.uuid,
+                        cheatName: cheatInfo.name,
+                        cheatType: cheatInfo.type,
+                        cheatCategory: cheatInfo.category,
+                        cheatTarget: cheatInfo.target,
                         cheatInstructionsRead: this.#v.isRead(
-                          n.uuid,
-                          n.instructions
+                          cheatInfo.uuid,
+                          cheatInfo.instructions
                         ),
-                        cheatHasInstructions: !!n.instructions,
+                        cheatHasInstructions: !!cheatInfo.instructions,
                       },
                       t,
                       r.params
@@ -549,8 +564,8 @@
                           ),
                           I.$9
                         )
-                      : i.has(n.uuid) ||
-                        (i.add(n.uuid),
+                      : i.has(cheatInfo.uuid) ||
+                        (i.add(cheatInfo.uuid),
                         this.#C(
                           "trainer_cheat",
                           Object.assign(
@@ -574,8 +589,8 @@
                   error: !1,
                   timestamp: Date.now(),
                   params: {
-                    trainerTotalDuration: A(e.totalDuration),
-                    trainerActiveDuration: A(e.activeDuration),
+                    trainerTotalDuration: convertMillisecondsToSecondsWithTwoDecimals(e.totalDuration),
+                    trainerActiveDuration: convertMillisecondsToSecondsWithTwoDecimals(e.activeDuration),
                   },
                   event: t,
                 });
@@ -587,8 +602,8 @@
                   error: !0,
                   timestamp: Date.now(),
                   params: {
-                    trainerTotalDuration: A(e.totalDuration),
-                    trainerActiveDuration: A(e.activeDuration),
+                    trainerTotalDuration: convertMillisecondsToSecondsWithTwoDecimals(e.totalDuration),
+                    trainerActiveDuration: convertMillisecondsToSecondsWithTwoDecimals(e.activeDuration),
                   },
                 });
               })
