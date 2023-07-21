@@ -1,0 +1,2 @@
+WeMod.exe filter=lfs diff=lfs merge=lfs -text
+Squirrel.exe filter=lfs diff=lfs merge=lfs -text
